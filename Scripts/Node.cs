@@ -112,13 +112,15 @@ namespace XNode {
         [SerializeField] public NodeGraph graph;
         /// <summary> Position on the <see cref="NodeGraph"/> </summary>
         [SerializeField] public Vector2 position;
+        /// <summary> Folded on the <see cref="NodeGraph"/> </summary>
+        [SerializeField] public bool folded;
         /// <summary> It is recommended not to modify these at hand. Instead, see <see cref="InputAttribute"/> and <see cref="OutputAttribute"/> </summary>
         [SerializeField] private NodePortDictionary ports = new NodePortDictionary();
 
         /// <summary> Used during node instantiation to fix null/misconfigured graph during OnEnable/Init. Set it before instantiating a node. Will automatically be unset during OnEnable </summary>
         public static NodeGraph graphHotfix;
 
-        protected void OnEnable() {
+        protected virtual void OnEnable() {
             if (graphHotfix != null) graph = graphHotfix;
             graphHotfix = null;
             UpdatePorts();
@@ -263,8 +265,15 @@ namespace XNode {
         }
 
 #region Attributes
+#if ODIN_INSPECTOR
+		[Sirenix.OdinInspector.DontApplyToListElements]
+#endif
         /// <summary> Mark a serializable field as an input port. You can access this through <see cref="GetInputPort(string)"/> </summary>
-        [AttributeUsage(AttributeTargets.Field)]
+        [AttributeUsage(AttributeTargets.Field
+#if ODIN_INSPECTOR
+			| AttributeTargets.Property
+#endif
+		)]
         public class InputAttribute : Attribute {
             public ShowBackingValue backingValue;
             public ConnectionType connectionType;
@@ -285,9 +294,16 @@ namespace XNode {
                 this.typeConstraint = typeConstraint;
             }
         }
-
+		
+#if ODIN_INSPECTOR
+		[Sirenix.OdinInspector.DontApplyToListElements]
+#endif
         /// <summary> Mark a serializable field as an output port. You can access this through <see cref="GetOutputPort(string)"/> </summary>
-        [AttributeUsage(AttributeTargets.Field)]
+        [AttributeUsage(AttributeTargets.Field
+#if ODIN_INSPECTOR
+			| AttributeTargets.Property
+#endif
+		)]
         public class OutputAttribute : Attribute {
             public ShowBackingValue backingValue;
             public ConnectionType connectionType;

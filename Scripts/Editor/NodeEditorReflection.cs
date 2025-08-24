@@ -14,6 +14,7 @@ namespace XNodeEditor {
     public static class NodeEditorReflection {
         [NonSerialized] private static Dictionary<Type, Color> nodeTint;
         [NonSerialized] private static Dictionary<Type, int> nodeWidth;
+        [NonSerialized] private static Dictionary<Type, bool> nodeNotFoldable;
         /// <summary> All available node types </summary>
         public static Type[] nodeTypes { get { return _nodeTypes != null ? _nodeTypes : _nodeTypes = GetNodeTypes(); } }
 
@@ -21,10 +22,10 @@ namespace XNodeEditor {
 
         /// <summary> Return a delegate used to determine whether window is docked or not. It is faster to cache this delegate than run the reflection required each time. </summary>
         public static Func<bool> GetIsDockedDelegate(this EditorWindow window) {
-            BindingFlags fullBinding = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+                    BindingFlags fullBinding = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
             MethodInfo isDockedMethod = typeof(EditorWindow).GetProperty("docked", fullBinding).GetGetMethod(true);
             return (Func<bool>) Delegate.CreateDelegate(typeof(Func<bool>), window, isDockedMethod);
-        }
+                }
 
         public static Type[] GetNodeTypes() {
             //Get all classes deriving from Node via reflection
@@ -45,6 +46,16 @@ namespace XNodeEditor {
                 CacheAttributes<int, XNode.Node.NodeWidthAttribute>(ref nodeWidth, x => x.width);
             }
             return nodeWidth.TryGetValue(nodeType, out width);
+        }
+
+        /// <summary> Get custom node widths defined with [NodeWidth(width)] </summary>
+        public static bool TryGetAttributeFoldable(this Type nodeType, out bool foldable) {
+            if (nodeNotFoldable == null) {
+                CacheAttributes<bool, DontFoldAttribute>(ref nodeNotFoldable, x => false);
+            }
+
+            foldable = !nodeNotFoldable.ContainsKey( nodeType );
+            return true;
         }
 
         private static void CacheAttributes<V, A>(ref Dictionary<Type, V> dict, Func<A, V> getter) where A : Attribute {
@@ -72,7 +83,7 @@ namespace XNodeEditor {
             System.Reflection.Assembly[] assemblies = System.AppDomain.CurrentDomain.GetAssemblies();
             foreach (Assembly assembly in assemblies) {
                 try {
-                    types.AddRange(assembly.GetTypes().Where(t => !t.IsAbstract && baseType.IsAssignableFrom(t)).ToArray());
+                types.AddRange(assembly.GetTypes().Where(t => !t.IsAbstract && baseType.IsAssignableFrom(t)).ToArray());
                 } catch (ReflectionTypeLoadException) { }
             }
             return types.ToArray();
@@ -94,10 +105,10 @@ namespace XNodeEditor {
                     if (invalidatedEntries.Contains(kvp.Key.menuItem)) {
                         contextMenu.AddDisabledItem(new GUIContent(kvp.Key.menuItem));
                     } else {
-                        contextMenu.AddItem(new GUIContent(kvp.Key.menuItem), false, () => kvp.Value.Invoke(obj, null));
-                    }
+                    contextMenu.AddItem(new GUIContent(kvp.Key.menuItem), false, () => kvp.Value.Invoke(obj, null));
                 }
             }
+        }
         }
 
         /// <summary> Call OnValidate on target </summary>

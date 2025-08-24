@@ -73,7 +73,7 @@ namespace XNodeEditor {
                         if (IsDraggingPort) {
                             // Set target even if we can't connect, so as to prevent auto-conn menu from opening erroneously
                             if (IsHoveringPort && hoveredPort.IsInput && !draggedOutput.IsConnectedTo(hoveredPort)) {
-                                draggedOutputTarget = hoveredPort;
+                                    draggedOutputTarget = hoveredPort;
                             } else {
                                 draggedOutputTarget = null;
                             }
@@ -502,8 +502,8 @@ namespace XNodeEditor {
         /// <summary> Draw a connection as we are dragging it </summary>
         public void DrawDraggedConnection() {
             if (IsDraggingPort) {
-                Gradient gradient = graphEditor.GetNoodleGradient(draggedOutput, null);
-                float thickness = graphEditor.GetNoodleThickness(draggedOutput, null);
+                Gradient gradient = graphEditor.GetNoodleGradient(true, draggedOutput, null);
+                float thickness = graphEditor.GetNoodleThickness(true, draggedOutput, null);
                 NoodlePath path = graphEditor.GetNoodlePath(draggedOutput, null);
                 NoodleStroke stroke = graphEditor.GetNoodleStroke(draggedOutput, null);
 

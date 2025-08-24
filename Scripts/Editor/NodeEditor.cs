@@ -5,7 +5,6 @@ using UnityEditor;
 using UnityEngine;
 #if ODIN_INSPECTOR
 using Sirenix.OdinInspector.Editor;
-using Sirenix.Utilities;
 using Sirenix.Utilities.Editor;
 #endif
 #if UNITY_2019_1_OR_NEWER && USE_ADVANCED_GENERIC_MENU
@@ -21,85 +20,92 @@ namespace XNodeEditor {
         public static Action<XNode.Node> onUpdateNode;
         public readonly static Dictionary<XNode.NodePort, Vector2> portPositions = new Dictionary<XNode.NodePort, Vector2>();
 
-#if ODIN_INSPECTOR
-        protected internal static bool inNodeEditor = false;
-#endif
+        [InitializeOnLoadMethod]
+        private static void InitializeStatic()
+        {
+            inNodeEditor = 0;
+        }
+
+        private static int inNodeEditor = 0;
+        public static bool InNodeEditor { get { return inNodeEditor > 0; } }
+
+        public static void PushInNodeEditor()
+        {
+            inNodeEditor++;
+        }
+
+        public static void PopInNodeEditor()
+        {
+            Debug.Assert( inNodeEditor > 0, "InNodeEditor was not positive. Push/Pop mismatch." );
+            inNodeEditor--;
+        }
 
         public virtual void OnHeaderGUI() {
             GUILayout.Label(target.name, NodeEditorResources.styles.nodeHeader, GUILayout.Height(30));
         }
 
+#if ODIN_INSPECTOR
+        public virtual void DrawTree()
+        {
+            objectTree.Draw( true );
+        }
+#endif
+
         /// <summary> Draws standard field editors for all public fields </summary>
         public virtual void OnBodyGUI() {
-#if ODIN_INSPECTOR
-            inNodeEditor = true;
-#endif
+            PushInNodeEditor();
 
-            // Unity specifically requires this to save/update any serial object.
-            // serializedObject.Update(); must go at the start of an inspector gui, and
-            // serializedObject.ApplyModifiedProperties(); goes at the end.
-            serializedObject.Update();
-            string[] excludes = { "m_Script", "graph", "position", "ports" };
-
-#if ODIN_INSPECTOR
             try
             {
-#if ODIN_INSPECTOR_3
-                objectTree.BeginDraw( true );
-#else
-                InspectorUtilities.BeginDrawPropertyTree(objectTree, true);
-#endif
-            }
-            catch ( ArgumentNullException )
-            {
-#if ODIN_INSPECTOR_3
-                objectTree.EndDraw();
-#else
-                InspectorUtilities.EndDrawPropertyTree(objectTree);
-#endif
-                NodeEditor.DestroyEditor(this.target);
-                return;
-            }
-
-            GUIHelper.PushLabelWidth( 84 );
-            objectTree.Draw( true );
-#if ODIN_INSPECTOR_3
-            objectTree.EndDraw();
-#else
-            InspectorUtilities.EndDrawPropertyTree(objectTree);
-#endif
-            GUIHelper.PopLabelWidth();
-#else
-
-            // Iterate through serialized properties and draw them like the Inspector (But with ports)
-            SerializedProperty iterator = serializedObject.GetIterator();
-            bool enterChildren = true;
-            while (iterator.NextVisible(enterChildren)) {
-                enterChildren = false;
-                if (excludes.Contains(iterator.name)) continue;
-                NodeEditorGUILayout.PropertyField(iterator, true);
-            }
-#endif
-
-            // Iterate through dynamic ports and draw them in the order in which they are serialized
-            foreach (XNode.NodePort dynamicPort in target.DynamicPorts) {
-                if (NodeEditorGUILayout.IsDynamicPortListPort(dynamicPort)) continue;
-                NodeEditorGUILayout.PortField(dynamicPort);
-            }
-
-            serializedObject.ApplyModifiedProperties();
-
 #if ODIN_INSPECTOR
-            // Call repaint so that the graph window elements respond properly to layout changes coming from Odin
-            if (GUIHelper.RepaintRequested) {
-                GUIHelper.ClearRepaintRequest();
-                window.Repaint();
-            }
+                if ( OdinInspectorHelper.EnableOdinNodeDrawer) {
+#if !ODIN_INSPECTOR_3
+                    InspectorUtilities.BeginDrawPropertyTree(objectTree, true);
 #endif
 
-#if ODIN_INSPECTOR
-            inNodeEditor = false;
+                    GUIHelper.PushLabelWidth( 84 );
+                    DrawTree();
+#if !ODIN_INSPECTOR_3
+                    InspectorUtilities.EndDrawPropertyTree(objectTree);
 #endif
+                    GUIHelper.PopLabelWidth();
+
+                    // Call repaint so that the graph window elements respond properly to layout changes coming from Odin
+                    if (GUIHelper.RepaintRequested) {
+                        GUIHelper.ClearRepaintRequest();
+                        window.Repaint();
+                    }
+                }
+                else
+#endif
+                {
+                    // Unity specifically requires this to save/update any serial object.
+                    // serializedObject.Update(); must go at the start of an inspector gui, and
+                    // serializedObject.ApplyModifiedProperties(); goes at the end.
+                    serializedObject.Update();
+                    string[] excludes = { "m_Script", "graph", "position", "folded", "ports" };
+
+                    // Iterate through serialized properties and draw them like the Inspector (But with ports)
+                    SerializedProperty iterator = serializedObject.GetIterator();
+                    bool enterChildren = true;
+                    while ( iterator.NextVisible(enterChildren)) {
+                        enterChildren = false;
+                        if ( excludes.Contains(iterator.name)) continue;
+                        NodeEditorGUILayout.PropertyField(iterator, true);
+                    }
+
+                    // Iterate through dynamic ports and draw them in the order in which they are serialized
+                    foreach ( XNode.NodePort dynamicPort in target.DynamicPorts) {
+                        if ( NodeEditorGUILayout.IsDynamicPortListPort(dynamicPort)) continue;
+                        NodeEditorGUILayout.PortField(dynamicPort);
+                    }
+
+                    serializedObject.ApplyModifiedProperties();
+                }
+            }
+            finally {
+                PopInNodeEditor();
+            }
         }
 
         public virtual int GetWidth() {
