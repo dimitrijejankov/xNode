@@ -18,9 +18,9 @@ namespace XNodeEditor {
     /// <summary> Contains GUI methods </summary>
     public partial class NodeEditorWindow {
         public NodeGraphEditor graphEditor;
-        private List<UnityEngine.Object> selectionCache;
-        private List<XNode.Node> culledNodes;
-        private List<int> orderedNodeIndices = new List<int>();
+        private readonly HashSet<UnityEngine.Object> selectionCache = new();
+        private readonly HashSet<XNode.Node> culledNodes = new();
+        private List<int> orderedNodeIndices = new();
         /// <summary> 19 if docked, 22 if not </summary>
         private int topPadding { get { return isDocked() ? 19 : 22; } }
         /// <summary> Executed after all other window GUI. Useful if Zoom is ruining your day. Automatically resets after being run.</summary>
