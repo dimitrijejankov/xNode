@@ -186,6 +186,81 @@ namespace XNodeEditor {
             Handles.DrawAAPolyLine(thickness, polyLineTempArray);
         }
 
+        /// <summary> Draw an arrow in the middle of a connection path to show direction </summary>
+        private void DrawArrow(List<Vector2> points, Color color, float thickness, NoodlePath pathType) {
+            if (points.Count < 2) return;
+
+            // Calculate middle point and tangent direction based on path type
+            Vector2 middlePoint;
+            Vector2 direction = Vector2.zero;
+
+            if (points.Count == 2) {
+                // Simple straight line
+                middlePoint = Vector2.Lerp(points[0], points[1], 0.4f);
+                direction = (points[1] - points[0]).normalized;
+            } else {
+                // For curved paths, calculate actual tangent at middle
+                float t = 0.4f; // Middle parameter
+                int segmentCount = points.Count - 1;
+                float segmentT = t * segmentCount;
+                int segmentIndex = Mathf.FloorToInt(segmentT);
+                float localT = segmentT - segmentIndex;
+
+                if (segmentIndex >= segmentCount) {
+                    segmentIndex = segmentCount - 1;
+                    localT = 1.0f;
+                }
+
+                Vector2 p0 = points[Mathf.Max(0, segmentIndex - 1)];
+                Vector2 p1 = points[segmentIndex];
+                Vector2 p2 = points[Mathf.Min(segmentCount, segmentIndex + 1)];
+                Vector2 p3 = points[Mathf.Min(segmentCount, segmentIndex + 2)];
+
+                middlePoint = CalculateBezierPoint(p0, p1, p2, p3, localT);
+
+                // Calculate tangent by finding the derivative of the bezier curve
+                Vector2 tangent = CalculateBezierTangent(p0, p1, p2, p3, localT);
+                direction = tangent.normalized;
+            }
+
+            if (direction == Vector2.zero) return;
+
+            Vector2 perpendicular = new Vector2(-direction.y, direction.x).normalized;
+
+            // Arrow head size based on thickness and zoom
+            float arrowSize = Mathf.Max(8f, thickness * 4f) / zoom;
+
+            // Calculate arrow head points pointing towards the output
+            Vector2 arrowTip = middlePoint + direction * (arrowSize * 0.5f);
+            Vector2 arrowBase = middlePoint - direction * (arrowSize * 0.5f);
+            Vector2 arrowLeft = arrowBase + perpendicular * (arrowSize * 0.4f);
+            Vector2 arrowRight = arrowBase - perpendicular * (arrowSize * 0.4f);
+
+            // Draw the arrow head
+            Color originalColor = Handles.color;
+            Handles.color = color;
+
+            Vector3[] arrowPoints = new Vector3[] {
+                arrowLeft,
+                arrowTip,
+                arrowRight
+            };
+
+            Handles.DrawAAConvexPolygon(arrowPoints);
+            Handles.color = originalColor;
+        }
+
+        /// <summary> Calculate tangent of bezier curve at parameter t </summary>
+        private static Vector2 CalculateBezierTangent(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, float t) {
+            float u = 1 - t;
+            float tt = t * t;
+            float uu = u * u;
+
+            // Tangent is the derivative of the bezier curve
+            Vector2 tangent = 3 * uu * (p1 - p0) + 6 * u * t * (p2 - p1) + 3 * tt * (p3 - p2);
+            return tangent;
+        }
+
         /// <summary> Draw a bezier from output to input in grid coordinates </summary>
         public void DrawNoodle(Gradient gradient, NoodlePath path, NoodleStroke stroke, float thickness, List<Vector2> gridPoints) {
             // convert grid points to window points
@@ -356,6 +431,12 @@ namespace XNodeEditor {
                     gridPoints[length - 1] = end;
                     break;
             }
+
+            // Draw arrow when ports are centered to show direction
+            if (graph != null && graph.centerPorts && gridPoints.Count >= 2) {
+                DrawArrow(gridPoints, gradient.Evaluate(1f), thickness, path);
+            }
+
             Handles.color = originalHandlesColor;
         }
 
@@ -401,9 +482,27 @@ namespace XNodeEditor {
                         List<Vector2> reroutePoints = output.GetReroutePoints(k);
 
                         gridPoints.Clear();
-                        gridPoints.Add(fromRect.center);
-                        gridPoints.AddRange(reroutePoints);
-                        gridPoints.Add(toRect.center);
+
+                        // When in centered mode, use node centers instead of port centers
+                        if (graph != null && graph.centerPorts) {
+                            // Calculate center of output node
+                            Vector2 outputNodeSize = nodeSizes.ContainsKey(node) ? nodeSizes[node] : new Vector2(208, 60);
+                            Vector2 outputNodeCenter = node.position + outputNodeSize / 2;
+
+                            // Calculate center of input node
+                            Vector2 inputNodeSize = nodeSizes.ContainsKey(input.node) ? nodeSizes[input.node] : new Vector2(208, 60);
+                            Vector2 inputNodeCenter = input.node.position + inputNodeSize / 2;
+
+                            gridPoints.Add(outputNodeCenter);
+                            gridPoints.AddRange(reroutePoints);
+                            gridPoints.Add(inputNodeCenter);
+                        } else {
+                            // Use port centers when not in centered mode
+                            gridPoints.Add(fromRect.center);
+                            gridPoints.AddRange(reroutePoints);
+                            gridPoints.Add(toRect.center);
+                        }
+
                         DrawNoodle(noodleGradient, noodlePath, noodleStroke, noodleThickness, gridPoints);
 
                         // Loop through reroute points again and draw the points
@@ -502,6 +601,7 @@ namespace XNodeEditor {
                 NodeEditor nodeEditor = NodeEditor.GetEditor(node, this);
 
                 NodeEditor.portPositions.Clear();
+                NodeEditorGUILayout.ClearCenterOffsets();
 
                 // Set default label width. This is potentially overridden in OnBodyGUI
                 EditorGUIUtility.labelWidth = 84;
