@@ -36,6 +36,11 @@ namespace XNodeEditor {
         [NonSerialized] private XNode.NodePort autoConnectOutput = null;
         [NonSerialized] private List<Vector2> draggedOutputReroutes = new List<Vector2>();
 
+        // Node-based port dragging when ports are centered
+        [NonSerialized] private bool isDraggingFromNode = false;
+        [NonSerialized] private XNode.Node dragSourceNode = null;
+        [NonSerialized] private XNode.NodePort dragSourcePort = null;
+
         private RerouteReference hoveredReroute = new RerouteReference();
         public List<RerouteReference> selectedReroutes = new List<RerouteReference>();
         private Vector2 dragBoxStart;
@@ -177,6 +182,19 @@ namespace XNodeEditor {
                                     if (NodeEditor.onUpdateNode != null) NodeEditor.onUpdateNode(node);
                                 }
                             }
+                        } else if (IsHoveringNode && graph != null && graph.centerPorts && !IsHoveringTitle(hoveredNode)) {
+                            // Node-based port dragging when ports are centered, but only when clicking on node body (not header)
+                            XNode.NodePort firstOutputPort = GetFirstOutputPort(hoveredNode);
+                            if (firstOutputPort != null) {
+                                // Always start dragging from the output port
+                                isDraggingFromNode = true;
+                                dragSourceNode = hoveredNode;
+                                dragSourcePort = firstOutputPort;
+                                draggedOutput = firstOutputPort;
+                                autoConnectOutput = firstOutputPort;
+                                e.Use();
+                            }
+                            // If no output port exists, do nothing
                         } else if (IsHoveringNode && IsHoveringTitle(hoveredNode)) {
                             // If mousedown on node header, select or deselect
                             if (!Selection.Contains(hoveredNode)) {
@@ -220,8 +238,25 @@ namespace XNodeEditor {
                     if (e.button == 0) {
                         //Port drag release
                         if (IsDraggingPort) {
-                            // If connection is valid, save it
-                            if (draggedOutputTarget != null && graphEditor.CanConnect(draggedOutput, draggedOutputTarget)) {
+                            // Handle node-based port dragging
+                            if (isDraggingFromNode && IsHoveringNode && hoveredNode != dragSourceNode) {
+                                // Always dragging from output port - look for input port on target
+                                XNode.NodePort targetInputPort = GetFirstInputPort(hoveredNode);
+                                if (targetInputPort != null && graphEditor.CanConnect(dragSourcePort, targetInputPort)) {
+                                    // Connect our source output to the target input
+                                    dragSourcePort.Connect(targetInputPort);
+
+                                    int connectionIndex = dragSourcePort.GetConnectionIndex(targetInputPort);
+                                    if (connectionIndex != -1) {
+                                        dragSourcePort.GetReroutePoints(connectionIndex).AddRange(draggedOutputReroutes);
+                                        if (NodeEditor.onUpdateNode != null) NodeEditor.onUpdateNode(hoveredNode);
+                                        EditorUtility.SetDirty(graph);
+                                    }
+                                }
+                                // If no input port exists on target, do nothing
+                            }
+                            // Regular port-to-port connection
+                            else if (draggedOutputTarget != null && graphEditor.CanConnect(draggedOutput, draggedOutputTarget)) {
                                 XNode.Node node = draggedOutputTarget.node;
                                 if (graph.nodes.Count != 0) draggedOutput.Connect(draggedOutputTarget);
 
@@ -234,7 +269,7 @@ namespace XNodeEditor {
                                 }
                             }
                             // Open context menu for auto-connection if there is no target node
-                            else if (draggedOutputTarget == null && NodeEditorPreferences.GetSettings().dragToCreate && autoConnectOutput != null) {
+                            else if (draggedOutputTarget == null && NodeEditorPreferences.GetSettings().dragToCreate && autoConnectOutput != null && !graph.centerPorts) {
                                 GenericMenu menu = new GenericMenu();
                                 graphEditor.AddContextMenuItems(menu, draggedOutput.ValueType);
                                 menu.DropDown(new Rect(Event.current.mousePosition, Vector2.zero));
@@ -242,6 +277,9 @@ namespace XNodeEditor {
                             //Release dragged connection
                             draggedOutput = null;
                             draggedOutputTarget = null;
+                            isDraggingFromNode = false;
+                            dragSourceNode = null;
+                            dragSourcePort = null;
                             EditorUtility.SetDirty(graph);
                             if (NodeEditorPreferences.GetSettings().autoSave) AssetDatabase.SaveAssets();
                         } else if (currentActivity == NodeActivity.DragNode) {
@@ -277,7 +315,8 @@ namespace XNodeEditor {
 
                         Repaint();
                         currentActivity = NodeActivity.Idle;
-                    } else if (e.button == 1 || e.button == 2) {
+                    }
+                    else if (e.button == 1 || e.button == 2) {
                         if (!isPanning) {
                             if (IsDraggingPort) {
                                 draggedOutputReroutes.Add(WindowToGridPosition(e.mousePosition));
@@ -295,7 +334,7 @@ namespace XNodeEditor {
                                 NodeEditor.GetEditor(hoveredNode, this).AddContextMenuItems(menu);
                                 menu.DropDown(new Rect(Event.current.mousePosition, Vector2.zero));
                                 e.Use(); // Fixes copy/paste context menu appearing in Unity 5.6.6f2 - doesn't occur in 2018.3.2f1 Probably needs to be used in other places.
-                            } else if (!IsHoveringNode) {
+                            } else if (!IsHoveringNode && e.button == 1) {
                                 autoConnectOutput = null;
                                 GenericMenu menu = new GenericMenu();
                                 graphEditor.AddContextMenuItems(menu);
@@ -510,12 +549,33 @@ namespace XNodeEditor {
                 Rect fromRect;
                 if (!_portConnectionPoints.TryGetValue(draggedOutput, out fromRect)) return;
                 List<Vector2> gridPoints = new List<Vector2>();
-                gridPoints.Add(fromRect.center);
+
+                // When in centered mode, use node center instead of port center
+                if (graph.centerPorts) {
+                    // Calculate center of the source node
+                    Vector2 sourceNodeSize = nodeSizes.ContainsKey(draggedOutput.node) ? nodeSizes[draggedOutput.node] : new Vector2(208, 60);
+                    Vector2 sourceNodeCenter = draggedOutput.node.position + sourceNodeSize / 2;
+                    gridPoints.Add(sourceNodeCenter);
+                } else {
+                    gridPoints.Add(fromRect.center);
+                }
+
                 for (int i = 0; i < draggedOutputReroutes.Count; i++) {
                     gridPoints.Add(draggedOutputReroutes[i]);
                 }
-                if (draggedOutputTarget != null) gridPoints.Add(portConnectionPoints[draggedOutputTarget].center);
-                else gridPoints.Add(WindowToGridPosition(Event.current.mousePosition));
+
+                if (draggedOutputTarget != null) {
+                    // When in centered mode, use target node center instead of port center
+                    if (graph.centerPorts) {
+                        Vector2 targetNodeSize = nodeSizes.ContainsKey(draggedOutputTarget.node) ? nodeSizes[draggedOutputTarget.node] : new Vector2(208, 60);
+                        Vector2 targetNodeCenter = draggedOutputTarget.node.position + targetNodeSize / 2;
+                        gridPoints.Add(targetNodeCenter);
+                    } else {
+                        gridPoints.Add(portConnectionPoints[draggedOutputTarget].center);
+                    }
+                } else {
+                    gridPoints.Add(WindowToGridPosition(Event.current.mousePosition));
+                }
 
                 DrawNoodle(gradient, path, stroke, thickness, gridPoints);
 
@@ -547,6 +607,18 @@ namespace XNodeEditor {
             else width = 200;
             Rect windowRect = new Rect(nodePos, new Vector2(width / zoom, 30 / zoom));
             return windowRect.Contains(mousePos);
+        }
+
+        /// <summary> Get the first input port of a node, or null if none exists </summary>
+        private XNode.NodePort GetFirstInputPort(XNode.Node node) {
+            if (node == null) return null;
+            return node.Inputs.FirstOrDefault();
+        }
+
+        /// <summary> Get the first output port of a node, or null if none exists </summary>
+        private XNode.NodePort GetFirstOutputPort(XNode.Node node) {
+            if (node == null) return null;
+            return node.Outputs.FirstOrDefault();
         }
 
         /// <summary> Attempt to connect dragged output to target node </summary>
