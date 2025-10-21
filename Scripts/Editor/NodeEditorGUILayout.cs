@@ -13,10 +13,16 @@ namespace XNodeEditor {
 
         private static readonly Dictionary<UnityEngine.Object, Dictionary<string, ReorderableList>> reorderableListCache = new Dictionary<UnityEngine.Object, Dictionary<string, ReorderableList>>();
         private static int reorderableListIndex = -1;
+        private static readonly Dictionary<XNode.Node, float> nodeCenterOffsets = new Dictionary<XNode.Node, float>();
 
         /// <summary> Make a field for a serialized property. Automatically displays relevant node port. </summary>
         public static void PropertyField(SerializedProperty property, bool includeChildren = true, params GUILayoutOption[] options) {
             PropertyField(property, (GUIContent)null, includeChildren, options);
+        }
+
+        /// <summary> Clear cached center offsets for the current drawing session </summary>
+        public static void ClearCenterOffsets() {
+            nodeCenterOffsets.Clear();
         }
 
         /// <summary> Make a field for a serialized property. Automatically displays relevant node port. </summary>
@@ -131,7 +137,24 @@ namespace XNodeEditor {
 
                     rect = GUILayoutUtility.GetLastRect();
                     float paddingLeft = NodeEditorWindow.current.graphEditor.GetPortStyle(port).padding.left;
-                    rect.position = rect.position - new Vector2(16 + paddingLeft, -spacePadding);
+
+                    // Check if graph centering is enabled
+                    bool centerPorts = NodeEditorWindow.current.graph != null && NodeEditorWindow.current.graph.centerPorts;
+
+                    if (centerPorts) {
+                        // Position port at center of node height
+                        // Calculate and cache the center position for this node
+                        if (!nodeCenterOffsets.ContainsKey(port.node)) {
+                            Vector2 nodeSize = NodeEditorWindow.current.nodeSizes.ContainsKey(port.node) ?
+                                NodeEditorWindow.current.nodeSizes[port.node] : new Vector2(208, 60); // Default size
+                            nodeCenterOffsets[port.node] = (nodeSize.y / 2) - 8;
+                        }
+                        float centerOffset = nodeCenterOffsets[port.node];
+                        // For input ports, position at left edge of node content area at center height
+                        rect.position = new Vector2(-16 - paddingLeft, centerOffset);
+                    } else {
+                        rect.position = rect.position - new Vector2(16 + paddingLeft, -spacePadding);
+                    }
                     // If property is an output, display a text label and put a port handle on the right side
                 } else if (port.direction == XNode.NodePort.IO.Output) {
                     // Get data from [Output] attribute
@@ -205,7 +228,27 @@ namespace XNodeEditor {
 
                     rect = GUILayoutUtility.GetLastRect();
                     rect.width += NodeEditorWindow.current.graphEditor.GetPortStyle(port).padding.right;
-                    rect.position = rect.position + new Vector2(rect.width, spacePadding);
+
+                    // Check if graph centering is enabled
+                    bool centerPorts = NodeEditorWindow.current.graph != null && NodeEditorWindow.current.graph.centerPorts;
+
+                    if (centerPorts) {
+                        // Position port at center of node height
+                        // Use cached center position for this node
+                        if (!nodeCenterOffsets.ContainsKey(port.node)) {
+                            Vector2 nodeSize = NodeEditorWindow.current.nodeSizes.ContainsKey(port.node) ?
+                                NodeEditorWindow.current.nodeSizes[port.node] : new Vector2(208, 60); // Default size
+                            nodeCenterOffsets[port.node] = (nodeSize.y / 2) - 8;
+                        }
+                        float centerOffset = nodeCenterOffsets[port.node];
+                        // For output ports, position at right edge of node content area at center height
+                        Vector2 nodeDim = NodeEditorWindow.current.nodeSizes.ContainsKey(port.node) ?
+                            NodeEditorWindow.current.nodeSizes[port.node] : new Vector2(208, 60); // Default size
+                        float nodeWidth = nodeDim.x;
+                        rect.position = new Vector2(nodeWidth, centerOffset);
+                    } else {
+                        rect.position = rect.position + new Vector2(rect.width, spacePadding);
+                    }
                 }
 
                 rect.size = new Vector2(16, 16);
@@ -246,7 +289,24 @@ namespace XNodeEditor {
 
                 Rect rect = GUILayoutUtility.GetLastRect();
                 float paddingLeft = NodeEditorWindow.current.graphEditor.GetPortStyle(port).padding.left;
-                position = rect.position - new Vector2(16 + paddingLeft, 0);
+
+                // Check if graph centering is enabled
+                bool centerPorts = NodeEditorWindow.current.graph != null && NodeEditorWindow.current.graph.centerPorts;
+
+                if (centerPorts) {
+                    // Position port at center of node height
+                    // Use cached center position for this node
+                    if (!nodeCenterOffsets.ContainsKey(port.node)) {
+                        Vector2 nodeSize = NodeEditorWindow.current.nodeSizes.ContainsKey(port.node) ?
+                            NodeEditorWindow.current.nodeSizes[port.node] : new Vector2(208, 60); // Default size
+                        nodeCenterOffsets[port.node] = (nodeSize.y / 2) - 8;
+                    }
+                    float centerOffset = nodeCenterOffsets[port.node];
+                    // For input ports, position at left edge of node content area at center height
+                    position = new Vector2(-16 - paddingLeft, centerOffset);
+                } else {
+                    position = rect.position - new Vector2(16 + paddingLeft, 0);
+                }
             }
             // If property is an output, display a text label and put a port handle on the right side
             else if (port.direction == XNode.NodePort.IO.Output) {
@@ -255,7 +315,27 @@ namespace XNodeEditor {
 
                 Rect rect = GUILayoutUtility.GetLastRect();
                 rect.width += NodeEditorWindow.current.graphEditor.GetPortStyle(port).padding.right;
-                position = rect.position + new Vector2(rect.width, 0);
+
+                // Check if graph centering is enabled
+                bool centerPorts = NodeEditorWindow.current.graph != null && NodeEditorWindow.current.graph.centerPorts;
+
+                if (centerPorts) {
+                    // Position port at center of node height
+                    // Use cached center position for this node
+                    if (!nodeCenterOffsets.ContainsKey(port.node)) {
+                        Vector2 nodeSize = NodeEditorWindow.current.nodeSizes.ContainsKey(port.node) ?
+                            NodeEditorWindow.current.nodeSizes[port.node] : new Vector2(208, 60); // Default size
+                        nodeCenterOffsets[port.node] = (nodeSize.y / 2) - 8;
+                    }
+                    float centerOffset = nodeCenterOffsets[port.node];
+                    // For output ports, position at right edge of node content area at center height
+                    Vector2 nodeDim = NodeEditorWindow.current.nodeSizes.ContainsKey(port.node) ?
+                        NodeEditorWindow.current.nodeSizes[port.node] : new Vector2(208, 60); // Default size
+                    float nodeWidth = nodeDim.x;
+                    position = new Vector2(nodeWidth, centerOffset);
+                } else {
+                    position = rect.position + new Vector2(rect.width, 0);
+                }
             }
             PortField(position, port);
         }
@@ -286,12 +366,49 @@ namespace XNodeEditor {
             if (port.direction == XNode.NodePort.IO.Input) {
                 rect = GUILayoutUtility.GetLastRect();
                 float paddingLeft = NodeEditorWindow.current.graphEditor.GetPortStyle(port).padding.left;
-                rect.position = rect.position - new Vector2(16 + paddingLeft, 0);
+
+                // Check if graph centering is enabled
+                bool centerPorts = NodeEditorWindow.current.graph != null && NodeEditorWindow.current.graph.centerPorts;
+
+                if (centerPorts) {
+                    // Position port at center of node height
+                    // Use cached center position for this node
+                    if (!nodeCenterOffsets.ContainsKey(port.node)) {
+                        Vector2 nodeSize = NodeEditorWindow.current.nodeSizes.ContainsKey(port.node) ?
+                            NodeEditorWindow.current.nodeSizes[port.node] : new Vector2(208, 60); // Default size
+                        nodeCenterOffsets[port.node] = (nodeSize.y / 2) - 8;
+                    }
+                    float centerOffset = nodeCenterOffsets[port.node];
+                    // For input ports, position at left edge of node content area at center height
+                    rect.position = new Vector2(-16 - paddingLeft, centerOffset);
+                } else {
+                    rect.position = rect.position - new Vector2(16 + paddingLeft, 0);
+                }
                 // If property is an output, display a text label and put a port handle on the right side
             } else if (port.direction == XNode.NodePort.IO.Output) {
                 rect = GUILayoutUtility.GetLastRect();
                 rect.width += NodeEditorWindow.current.graphEditor.GetPortStyle(port).padding.right;
-                rect.position = rect.position + new Vector2(rect.width, 0);
+
+                // Check if graph centering is enabled
+                bool centerPorts = NodeEditorWindow.current.graph != null && NodeEditorWindow.current.graph.centerPorts;
+
+                if (centerPorts) {
+                    // Position port at center of node height
+                    // Use cached center position for this node
+                    if (!nodeCenterOffsets.ContainsKey(port.node)) {
+                        Vector2 nodeSize = NodeEditorWindow.current.nodeSizes.ContainsKey(port.node) ?
+                            NodeEditorWindow.current.nodeSizes[port.node] : new Vector2(208, 60); // Default size
+                        nodeCenterOffsets[port.node] = (nodeSize.y / 2) - 8;
+                    }
+                    float centerOffset = nodeCenterOffsets[port.node];
+                    // For output ports, position at right edge of node content area at center height
+                    Vector2 nodeDim = NodeEditorWindow.current.nodeSizes.ContainsKey(port.node) ?
+                        NodeEditorWindow.current.nodeSizes[port.node] : new Vector2(208, 60); // Default size
+                    float nodeWidth = nodeDim.x;
+                    rect.position = new Vector2(nodeWidth, centerOffset);
+                } else {
+                    rect.position = rect.position + new Vector2(rect.width, 0);
+                }
             }
 
             rect.size = new Vector2(16, 16);
@@ -420,6 +537,30 @@ namespace XNodeEditor {
                     } else EditorGUI.LabelField(rect, port != null ? port.fieldName : "");
                     if (port != null) {
                         Vector2 pos = rect.position + (port.IsOutput ? new Vector2(rect.width + 6, 0) : new Vector2(-36, 0));
+
+                        // Check if graph centering is enabled
+                        bool centerPorts = NodeEditorWindow.current.graph != null && NodeEditorWindow.current.graph.centerPorts;
+
+                        if (centerPorts) {
+                            // Position port at center of node height
+                            // Use cached center position for this node
+                            if (!nodeCenterOffsets.ContainsKey(port.node)) {
+                                Vector2 nodeSize = NodeEditorWindow.current.nodeSizes.ContainsKey(port.node) ?
+                                    NodeEditorWindow.current.nodeSizes[port.node] : new Vector2(208, 60); // Default size
+                                nodeCenterOffsets[port.node] = (nodeSize.y / 2) - 8;
+                            }
+                            float centerOffset = nodeCenterOffsets[port.node];
+
+                            // Position at center height, with X position based on port direction
+                            if (port.IsOutput) {
+                                Vector2 nodeDim = NodeEditorWindow.current.nodeSizes.ContainsKey(port.node) ?
+                                    NodeEditorWindow.current.nodeSizes[port.node] : new Vector2(208, 60);
+                                pos = new Vector2(nodeDim.x, centerOffset);
+                            } else {
+                                pos = new Vector2(-36, centerOffset); // Input port position
+                            }
+                        }
+
                         NodeEditorGUILayout.PortField(pos, port);
                     }
                 };

@@ -109,6 +109,15 @@ namespace XNodeEditor {
             menu.AddSeparator("");
             if (NodeEditorWindow.copyBuffer != null && NodeEditorWindow.copyBuffer.Length > 0) menu.AddItem(new GUIContent("Paste"), false, () => NodeEditorWindow.current.PasteNodes(pos));
             else menu.AddDisabledItem(new GUIContent("Paste"));
+
+            // Add center ports toggle
+            bool centerPortsEnabled = target.centerPorts;
+            menu.AddItem(new GUIContent("Toggle Center Ports"), centerPortsEnabled, () => {
+                target.centerPorts = !target.centerPorts;
+                EditorUtility.SetDirty(target);
+                NodeEditorWindow.RepaintAll();
+            });
+
             menu.AddItem(new GUIContent("Preferences"), false, () => NodeEditorReflection.OpenPreferences());
             menu.AddCustomContextMenuItems(target);
         }
@@ -152,6 +161,10 @@ namespace XNodeEditor {
         }
 
         public virtual NoodlePath GetNoodlePath(XNode.NodePort output, XNode.NodePort input) {
+            // Use straight paths when center ports is enabled
+            if (target.centerPorts) {
+                return NoodlePath.Straight;
+            }
             return NodeEditorPreferences.GetSettings().noodlePath;
         }
 

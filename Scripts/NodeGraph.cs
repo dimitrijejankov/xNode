@@ -11,6 +11,17 @@ namespace XNode {
         /// See: <see cref="AddNode{T}"/> </summary>
         [SerializeField] public List<Node> nodes = new List<Node>();
 
+        /// <summary> Whether all ports should be positioned at the center of their respective nodes </summary>
+        [SerializeField] public bool centerPorts = false;
+
+#if UNITY_EDITOR
+        [ContextMenu("Toggle Center Ports")]
+        public void ToggleCenterPorts() {
+            centerPorts = !centerPorts;
+            UnityEditor.EditorUtility.SetDirty(this);
+        }
+#endif
+
         /// <summary> Add a node to the graph by type (convenience method - will call the System.Type version) </summary>
         public T AddNode<T>() where T : Node {
             return AddNode(typeof(T)) as T;
