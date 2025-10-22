@@ -195,6 +195,32 @@ namespace XNode {
                 RemoveDynamicPort(port);
             }
         }
+
+        /// <summary> Clear all connections from all ports on this node </summary>
+        [ContextMenu("Port Operations/Clear All Connections")]
+        public void ClearAllPortConnections() {
+            ClearConnections();
+        }
+
+        /// <summary> Clear all input connections on this node </summary>
+        [ContextMenu("Port Operations/Clear Input Connections")]
+        public void ClearInputConnections() {
+            foreach (NodePort port in Ports) {
+                if (port.direction == NodePort.IO.Input) {
+                    port.ClearConnections();
+                }
+            }
+        }
+
+        /// <summary> Clear all output connections on this node </summary>
+        [ContextMenu("Port Operations/Clear Output Connections")]
+        public void ClearOutputConnections() {
+            foreach (NodePort port in Ports) {
+                if (port.direction == NodePort.IO.Output) {
+                    port.ClearConnections();
+                }
+            }
+        }
 #endregion
 
 #region Ports
